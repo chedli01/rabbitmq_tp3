@@ -20,27 +20,30 @@ public class ClientReaderV2 {
             channel.queueDeclare("client_reader_queue", false, false, false, null);
 
             Map<String, Integer> lineCount = new HashMap<>();
+            int[] eofCount = {0}; // compteur de EOF reçus (besoin d'un tableau car variable utilisée en lambda)
 
             DeliverCallback deliverCallback = (consumerTag, delivery) -> {
                 String line = new String(delivery.getBody(), "UTF-8");
                 if (!line.equals("EOF")) {
                     lineCount.put(line, lineCount.getOrDefault(line, 0) + 1);
                 } else {
-                    // EOF reçu, affichons les résultats majoritaires
-                    System.out.println("Lignes présentes dans la majorité :");
-                    for (Map.Entry<String, Integer> entry : lineCount.entrySet()) {
-                        if (entry.getValue() >= 2) {
-                            System.out.println(entry.getKey());
+                    eofCount[0]++;
+                    if (eofCount[0] == 3) { // ATTENTION: attendre 3 EOF avant de finir
+                        System.out.println("Lignes présentes dans la majorité :");
+                        for (Map.Entry<String, Integer> entry : lineCount.entrySet()) {
+                            if (entry.getValue() >= 2) { // majorité = reçu par au moins 2 replicas
+                                System.out.println(entry.getKey());
+                            }
                         }
+                        System.exit(0);
                     }
-                    System.exit(0); // Fin du programme
                 }
             };
 
             channel.basicConsume("client_reader_queue", true, deliverCallback, consumerTag -> {});
 
             System.out.println("ClientReaderV2 attend toutes les lignes...");
-            Thread.sleep(15000); // Timeout de 15 secondes
+            Thread.sleep(30000); // Timeout de 30 secondes au cas où
         }
     }
 }
